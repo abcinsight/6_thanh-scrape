@@ -4,16 +4,15 @@ import time
 
 import grequests
 import requests
-from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
 '''
     APIs I used to fetch data:
-        "shop_details_api": "https://shopee.vn/api/v4/shop/get_shop_detail?shopid={Shopee_ID}",
-        "all_products_api": "https://shopee.vn/api/v4/shop/search_items?limit=100&shopid={Shopee_ID}&offset={offset}",
-        "product_reviews_api": "https://shopee.vn/api/v2/item/get_ratings?itemid={itemid}&limit=59&offset={offset}&shopid={Shopee_ID}"
+        "shop_details_api": "https://shopee.my/api/v4/shop/get_shop_detail?shopid={Shopee_ID}",
+        "all_products_api": "https://shopee.my/api/v4/shop/search_items?limit=100&shopid={Shopee_ID}&offset={offset}",
+        "product_reviews_api": "https://shopee.my/api/v2/item/get_ratings?itemid={itemid}&limit=59&offset={offset}&shopid={Shopee_ID}"
         
     To easy understand structure of json response, you can use https://jsonformatter.org/json-parser
 '''
@@ -26,12 +25,12 @@ def config_driver():
     options.add_argument('--disable-gpu')
 
     # need to set user-agent to load all item, if not just got 42 instead of 60
-    options.add_argument('user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36')
+    options.add_argument(
+        'user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36')
 
     driver = webdriver.Chrome(options=options)
-    
-    return driver
 
+    return driver
 
 
 def scroll_down_end_of_page(driver):
@@ -49,21 +48,6 @@ def scroll_down_end_of_page(driver):
         last_height = new_height
 
     return driver
-
-def scrape_shop_info(item_link):
-    driver = config_driver()
-
-    driver.get(item_link)
-    time.sleep(5)
-    english_btn = driver.find_element(by=By.XPATH, value='//*[@id="modal"]/div[1]/div[1]/div/div[3]/div[1]/button')
-    english_btn.click()
-
-    shop_name_locator = driver.find_element(by=By.CSS_SELECTOR, value='div[class="VlDReK"]')
-    shop_name = shop_name_locator.text
-    print(shop_name)
-    driver.quit()
-
-
 
 def dummy_func():
     ''' 
@@ -107,7 +91,8 @@ def get_shop_ids():
         driver.get(url=url)
         time.sleep(5)
         if idx == 0:
-            english_btn = driver.find_element(by=By.XPATH, value='//*[@id="modal"]/div[1]/div[1]/div/div[3]/div[1]/button')
+            english_btn = driver.find_element(
+                by=By.XPATH, value='//*[@id="modal"]/div[1]/div[1]/div/div[3]/div[1]/button')
             english_btn.click()
         # find all item_link_locators
         '''
@@ -117,31 +102,35 @@ def get_shop_ids():
             the '-i.134177481.19614535941' in item link stands for '-i.{shop_id}.{item_id}'
         '''
         # get total pages of category
-        category_pages_locator = driver.find_element(by=By.CSS_SELECTOR, value='span[class="shopee-mini-page-controller__total"]')
+        category_pages_locator = driver.find_element(
+            by=By.CSS_SELECTOR, value='span[class="shopee-mini-page-controller__total"]')
         pages = int(category_pages_locator.text)
 
-        for page in range(0,pages):
+        for page in range(0, pages):
             url = f'{urls[0]}?page={page}'
             if page != 0:
                 driver.get(url=url)
                 time.sleep(5)
             driver = scroll_down_end_of_page(driver=driver)
-            
-            item_link_locators = driver.find_elements(by=By.CSS_SELECTOR, value='a[data-sqe="link"]')
-            item_links = [item_link_locator.get_attribute('href') for item_link_locator in item_link_locators]
+
+            item_link_locators = driver.find_elements(
+                by=By.CSS_SELECTOR, value='a[data-sqe="link"]')
+            item_links = [item_link_locator.get_attribute(
+                'href') for item_link_locator in item_link_locators]
 
             # get shop_ids from item_links
             print(item_links[0].split('-i.')[1].split('.')[0])
 
             # this list contains all shop_ids includes duplicate
-            shop_ids_dups = list(item_link.split('-i.')[1].split('.')[0] for item_link in item_links)
+            shop_ids_dups = list(item_link.split(
+                '-i.')[1].split('.')[0] for item_link in item_links)
             # print(len(shop_ids_dups))
 
             # use set to store list to implicit not add duplicate shop_id
             total_shop_ids.update(shop_ids_dups)
         print(len(total_shop_ids))
 
-    # write data into a file  
+    # write data into a file
     with open('shop_ids.csv', 'w') as f:
         writer = csv.writer(f)
 
@@ -188,10 +177,11 @@ def get_shop_detail_from_shop_id():
     shop_names = []
     shop_item_counts = []
     shop_urls = []
- 
+
     # Use grequests to fetch data from api
     # start = time.time()
-    shop_detail_apis = [f'https://shopee.my/api/v4/shop/get_shop_detail?shopid={shop_id}' for shop_id in shop_ids]
+    shop_detail_apis = [
+        f'https://shopee.my/api/v4/shop/get_shop_detail?shopid={shop_id}' for shop_id in shop_ids]
     reqs = [grequests.get(url) for url in shop_detail_apis]
     resps = grequests.map(reqs)
     for resp in resps:
@@ -203,16 +193,17 @@ def get_shop_detail_from_shop_id():
         shop_names.append(shop_name)
         shop_item_counts.append(shop_item_count)
         shop_urls.append(shop_url)
-    
+
     header = ['shop_id', 'shop_name', 'shop_item_count', 'shop_url']
 
-    # write data into a file  
+    # write data into a file
     with open('shop_info_greq.csv', 'w') as csv_file:
         writer = csv.writer(csv_file)
 
         writer.writerow(header)
 
-        writer.writerows(zip(shop_ids, shop_names, shop_item_counts, shop_urls))
+        writer.writerows(
+            zip(shop_ids, shop_names, shop_item_counts, shop_urls))
     # end = time.time()
     # print(f"Time taken for grequest scraper: {end - start} seconds")
 
@@ -250,7 +241,7 @@ def get_product_detail_from_shop_id():
                     item_image = ','.join(data['items'][i]['item_basic']['images'])
                     item_price =  data['items'][i]['item_basic']['price'] / 100000
                     item_url = f'{BASE_URL}{item_name.replace(" ", "-") + f"-i.{shop_id}.{item_id}"}'
-                    
+
                     item_names.append(item_name)
                     item_images.append(item_image)
                     item_prices.append(item_prices)
@@ -265,16 +256,17 @@ def get_product_detail_from_shop_id():
         end = time.time()
         print(f"Time taken for requests scraper: {end - start} seconds")
     '''
-    
+
     shop_ids = []
-    shop_item_counts = [] # use this for grequests, otherwise remove it
+    shop_item_counts = []  # use this for grequests, otherwise remove it
     with open('shop_info_greq.csv', 'r') as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
         next(csv_reader)
         for row in csv_reader:
             shop_ids.append(row[0])
-            shop_item_counts.append(int(row[2])) # use this for grequests, otherwise remove it
-    
+            # use this for grequests, otherwise remove it
+            shop_item_counts.append(int(row[2]))
+
     BASE_URL = 'https://shopee.com.my/'
     # BASE_IMG_URL = 'https://cf.shopee.com.my/file/'
     item_ids = []
@@ -284,18 +276,19 @@ def get_product_detail_from_shop_id():
     item_urls = []
 
     # Using grequests to fetch data from api
-    # start = time.time()        
+    # start = time.time()
     all_products_apis = []
     for shop_id in shop_ids:
         idx = shop_ids.index(shop_id)
         offset = 0
         limit = 100
         while True:
-            all_products_apis.append(f'https://shopee.my/api/v4/shop/search_items?limit={limit}&shopid={shop_id}&offset={offset}')
+            all_products_apis.append(
+                f'https://shopee.my/api/v4/shop/search_items?limit={limit}&shopid={shop_id}&offset={offset}')
             if offset < shop_item_counts[idx]:
                 if offset + limit >= shop_item_counts[idx]:
                     break
-                else: 
+                else:
                     offset += limit
 
     reqs = (grequests.get(url, timeout=5) for url in all_products_apis)
@@ -314,10 +307,11 @@ def get_product_detail_from_shop_id():
                     item_id = data['items'][i]['itemid']
                     shop_id = data['items'][i]['shopid']
                     item_name = data['items'][i]['item_basic']['name']
-                    item_image = ','.join(data['items'][i]['item_basic']['images'])
-                    item_price =  data['items'][i]['item_basic']['price'] / 100000
+                    item_image = ','.join(
+                        data['items'][i]['item_basic']['images'])
+                    item_price = data['items'][i]['item_basic']['price'] / 100000
                     item_url = f'{BASE_URL}{item_name.replace(" ", "-") + f"-i.{shop_id}.{item_id}"}'
-                    
+
                     item_ids.append(item_id)
                     item_names.append(item_name)
                     item_images.append(item_image)
@@ -327,16 +321,18 @@ def get_product_detail_from_shop_id():
             print(f'request failed: {resp}')
     # end = time.time()
     # print(f"Time taken for requests scraper: {end - start} seconds")
-    
-    # write data into a file  
+
+    # write data into a file
     header = ['item_id, item_name', 'item_image', 'item_price', 'item_url']
     with open('product_info_greq.csv', 'a') as csv_file:
         writer = csv.writer(csv_file)
 
         writer.writerow(header)
 
-        writer.writerows(zip(item_ids, item_names, item_images, item_prices, item_urls))
-        
+        writer.writerows(
+            zip(item_ids, item_names, item_images, item_prices, item_urls))
+
+
 if __name__ == '__main__':
     get_shop_ids()
     get_shop_detail_from_shop_id()
