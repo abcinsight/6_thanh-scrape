@@ -1,8 +1,9 @@
 import csv
 import json
+import os
 import time
 import grequests
-
+from datetime import datetime
 '''
     APIs I used to fetch data:
         "shop_details_api": "https://shopee.my/api/v4/shop/get_shop_detail?shopid={Shopee_ID}",
@@ -203,8 +204,86 @@ def get_shopee_mall_product_from_shop_id():
         writer.writerows(
             zip(product_shop_ids, item_ids, item_names, item_images, item_prices, item_urls))
 
+def get_shopee_mall_product_from_shop_id_v2():
+    '''
+        This process to scrape data same with get_shopee_mall_product_from_shop_id(), 
+        but I reorganize the scrape data to the right format
+    '''
+    shop_ids = []
+    shop_item_counts = []  # use this for grequests, otherwise remove it
+    with open('shopee_mall_detail_info.csv', 'r') as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        next(csv_reader)
+        for row in csv_reader:
+            shop_ids.append(row[0])
+            # use this for grequests, otherwise remove it
+            shop_item_counts.append(int(row[6]))
+
+    BASE_URL = 'https://shopee.com.my/'
+
+    scrape_day = datetime.today().strftime('%Y-%m-%d')
+    scrape_major = 'my_mall'
+    __location__ = os.path.abspath('/Users/thanhninh/Documents/abc-studio/day1-webscraping')
+    result_path = os.path.join(__location__, 'shopee_scrape_result', scrape_day)
+    isExist = os.path.exists(result_path)
+    if not isExist:
+        os.makedirs(result_path)
+
+    # Using grequests to fetch data from api
+    # start = time.time()
+    for shop_id in shop_ids:
+        print(shop_ids.index(shop_id))
+        all_shop_items = []
+        all_products_apis = []
+        idx = shop_ids.index(shop_id)
+        offset = 0
+        limit = 100
+        while True:
+            all_products_apis.append(
+                f'https://shopee.my/api/v4/shop/search_items?limit={limit}&shopid={shop_id}&offset={offset}')
+            if offset <= shop_item_counts[idx]:
+                if offset + limit >= shop_item_counts[idx]:
+                    break
+                else:
+                    offset += limit
+        # print(len(all_products_apis))
+        reqs = (grequests.get(url) for url in all_products_apis)
+        resps = grequests.imap(reqs, size=50)
+
+        for resp in resps:
+            try:
+                data = json.loads(resp.text)
+                if data['total_count'] == 0:
+                    print(f'no more even offset less than total')
+                else:
+                    shop_items = data['items']
+                    # item_basic = shop_items['item_basic']
+                    # item_id = shop_items['']
+                    # for item in shop_items:
+                    #     item_id = item['itemid']
+                    #     item['product_link'] = f"{BASE_URL}/product/{shop_id}/{item_id}"
+                    all_shop_items.extend(shop_items)
+            except:
+                print(f'request failed: {resp}')
+        for item in all_shop_items:
+            del item['item_basic']['label_ids']
+            shop_id = item['shopid']
+            item_id = item['itemid']
+            item['product_link'] = f"{BASE_URL}product/{shop_id}/{item_id}"
+
+    # end = time.time()
+    # print(f"Time taken for requests scraper: {end - start} seconds")
+
+    # write data into a file
+        json_name = f"x. SHOP_ID_{shop_id}_{scrape_major}_{scrape_day}.json"
+        json_path = os.path.join(result_path, json_name)
+        with open(json_path, 'w', encoding='utf8') as f:
+            json.dump(all_shop_items, f, ensure_ascii=False, indent=4)
+
+
 if __name__ == '__main__':
     get_shopee_mall_basic_info()
     get_shopee_mall_detail_from_shop_id()
-    get_shopee_mall_product_from_shop_id()
+    # get_shopee_mall_product_from_shop_id()
+    get_shopee_mall_product_from_shop_id_v2()
 
